@@ -13,6 +13,7 @@ from fake_useragent import UserAgent
 import os
 from dotenv import load_dotenv
 import re
+import platform
 
 # Load environment variables
 load_dotenv()
@@ -105,22 +106,45 @@ class AustrianBankScraper:
         options.add_argument('--disable-dev-shm-usage')
         options.add_argument(f'user-agent={self.ua.random}')
 
-        # Try to use Chromium if available
-        chromium_paths = [
-            r'C:\Program Files\Google\Chrome\Application\chrome.exe',  # Default Chrome path
-            r'C:\Users\gabor\AppData\Local\Chromium\Application\chrome.exe',  # Primary path
-            r'C:\Program Files\Chromium\Application\chromium.exe',
-            r'C:\Program Files (x86)\Chromium\Application\chromium.exe',
-            '/usr/bin/chromium',
-            '/usr/bin/chromium-browser',
-        ]
+        # Define Chrome/Chromium paths based on OS
+        if platform.system() == 'Linux':
+            chromium_paths = [
+                '/usr/bin/google-chrome',
+                '/usr/bin/chromium-browser',
+                '/usr/bin/chromium',
+                '/snap/bin/chromium',
+                '/usr/local/bin/chromium',
+                '/usr/local/bin/chromium-browser'
+            ]
+        else:  # Windows paths
+            chromium_paths = [
+                r'C:\Program Files\Google\Chrome\Application\chrome.exe',
+                r'C:\Users\gabor\AppData\Local\Chromium\Application\chrome.exe',
+                r'C:\Program Files\Chromium\Application\chromium.exe',
+                r'C:\Program Files (x86)\Chromium\Application\chromium.exe'
+            ]
+
+        # Try to find Chrome/Chromium binary
+        binary_found = False
         for path in chromium_paths:
             if os.path.exists(path):
                 options.binary_location = path
-                logger.info(f"Using Chromium binary at: {path}")
+                logger.info(f"Using Chrome/Chromium binary at: {path}")
+                binary_found = True
                 break
-        else:
-            logger.info("Using default Chrome binary.")
+
+        if not binary_found:
+            logger.info("No Chrome/Chromium binary found in standard locations. Using default.")
+            if platform.system() == 'Linux':
+                # On Linux, try to use the system's default Chrome/Chromium
+                try:
+                    import subprocess
+                    chrome_path = subprocess.check_output(['which', 'google-chrome']).decode().strip()
+                    if chrome_path:
+                        options.binary_location = chrome_path
+                        logger.info(f"Found Chrome at: {chrome_path}")
+                except:
+                    pass
 
         self.driver = uc.Chrome(options=options)
         self.wait = WebDriverWait(self.driver, 10)
