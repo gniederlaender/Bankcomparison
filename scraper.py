@@ -99,55 +99,49 @@ class AustrianBankScraper:
         self.init_database()
 
     def setup_selenium(self):
-        """Set up Selenium WebDriver with appropriate options, preferring Chromium if available"""
+        """Set up Selenium WebDriver with appropriate options for ARM64"""
         options = uc.ChromeOptions()
         options.add_argument('--headless')
         options.add_argument('--no-sandbox')
         options.add_argument('--disable-dev-shm-usage')
         options.add_argument(f'user-agent={self.ua.random}')
 
-        # Define Chrome/Chromium paths based on OS
-        if platform.system() == 'Linux':
-            chromium_paths = [
-                '/usr/bin/google-chrome',
-                '/usr/bin/chromium-browser',
-                '/usr/bin/chromium',
-                '/snap/bin/chromium',
-                '/usr/local/bin/chromium',
-                '/usr/local/bin/chromium-browser'
-            ]
-        else:  # Windows paths
-            chromium_paths = [
-                r'C:\Program Files\Google\Chrome\Application\chrome.exe',
-                r'C:\Users\gabor\AppData\Local\Chromium\Application\chrome.exe',
-                r'C:\Program Files\Chromium\Application\chromium.exe',
-                r'C:\Program Files (x86)\Chromium\Application\chromium.exe'
-            ]
+        # Set the Chrome binary path explicitly for ARM64
+        chrome_binary = '/snap/bin/chromium'
+        if os.path.exists(chrome_binary):
+            options.binary_location = chrome_binary
+            logger.info(f"Using Chrome binary at: {chrome_binary}")
+        else:
+            logger.error(f"Chrome binary not found at {chrome_binary}")
+            raise FileNotFoundError(f"Chrome binary not found at {chrome_binary}")
 
-        # Try to find Chrome/Chromium binary
-        binary_found = False
-        for path in chromium_paths:
-            if os.path.exists(path):
-                options.binary_location = path
-                logger.info(f"Using Chrome/Chromium binary at: {path}")
-                binary_found = True
-                break
+        # Remove existing ChromeDriver if it exists
+        driver_path = os.path.expanduser('~/.local/share/undetected_chromedriver')
+        if os.path.exists(driver_path):
+            logger.info(f"Removing existing ChromeDriver at {driver_path}")
+            import shutil
+            shutil.rmtree(driver_path)
 
-        if not binary_found:
-            logger.info("No Chrome/Chromium binary found in standard locations. Using default.")
-            if platform.system() == 'Linux':
-                # On Linux, try to use the system's default Chrome/Chromium
-                try:
-                    import subprocess
-                    chrome_path = subprocess.check_output(['which', 'google-chrome']).decode().strip()
-                    if chrome_path:
-                        options.binary_location = chrome_path
-                        logger.info(f"Found Chrome at: {chrome_path}")
-                except:
-                    pass
-
-        self.driver = uc.Chrome(options=options)
-        self.wait = WebDriverWait(self.driver, 10)
+        # Initialize the driver with specific version for ARM64
+        try:
+            logger.info("Initializing Chrome driver for ARM64...")
+            self.driver = uc.Chrome(
+                options=options,
+                version_main=None,  # Let it auto-detect the version
+                driver_executable_path=None,  # Let it download the appropriate driver
+                browser_executable_path=chrome_binary,
+                suppress_welcome=True,  # Suppress welcome screen
+                headless=True,  # Run in headless mode
+                use_subprocess=True  # Use subprocess for better compatibility
+            )
+            logger.info("Chrome driver initialized successfully")
+            self.wait = WebDriverWait(self.driver, 10)
+        except Exception as e:
+            logger.error(f"Failed to initialize Chrome driver: {str(e)}")
+            # Debug: Check if ChromeDriver was downloaded
+            if os.path.exists(driver_path):
+                logger.info(f"ChromeDriver directory contents after error: {os.listdir(driver_path)}")
+            raise
 
     def init_database(self):
         """Initialize SQLite database and create necessary tables"""
